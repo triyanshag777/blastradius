@@ -6,7 +6,7 @@ from falkordb import FalkorDB
 
 def file_authors(repo, file):
     out = subprocess.run(
-        ["git", "-C", repo, "log", "--format=%an", "--", file],
+        ["git", "-C", repo, "log", "--follow", "--format=%an", "--", file],
         capture_output=True, text=True,
     ).stdout
     return Counter(line.strip() for line in out.splitlines() if line.strip())
