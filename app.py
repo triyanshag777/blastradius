@@ -34,7 +34,7 @@ def build_graph(results):
     target = imp["target"]
     deps = [d for d in imp["dependents"] if d["hops"] <= 3][:60]
     tst = last_result(results, "tests_for", "tests")
-    tests = (tst["tests"] if tst else [])[:6]
+    tests = (tst["tests"] if tst else [])[:4]
 
     hops, kind = {target: 0}, {target: "target"}
     for d in deps:
