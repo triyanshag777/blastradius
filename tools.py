@@ -9,7 +9,7 @@ def _g():
 
 def find_function(text, limit=10):
     rows = _g().query(
-        "MATCH (f:Function) WHERE f.name CONTAINS $s AND f.is_test = false "
+        "MATCH (f:Function) WHERE f.name CONTAINS $s AND f.in_tests = false "
         "RETURN f.name LIMIT $limit",
         {"s": text, "limit": int(limit)},
     ).result_set
@@ -19,7 +19,7 @@ def find_function(text, limit=10):
 def impact(name, max_hops=5):
     q = (
         f"MATCH p = (d:Function)-[:CALLS*1..{int(max_hops)}]->(f:Function {{name: $name}}) "
-        "WHERE d.is_test = false "
+        "WHERE d.in_tests = false "
         "RETURN d.name AS dependent, min(length(p)) AS hops "
         "ORDER BY hops, dependent"
     )
@@ -66,3 +66,31 @@ def explain_path(source, target):
     if not rows or not rows[0][0]:
         return {"source": source, "target": target, "path": None}
     return {"source": source, "target": target, "path": rows[0][0]}
+
+
+def criticality(limit=10):
+    rows = _g().query(
+        "CALL algo.pageRank('Function', 'CALLS') YIELD node, score "
+        "WITH node, score WHERE node.in_tests = false "
+        "RETURN node.name AS name, score ORDER BY score DESC LIMIT $limit",
+        {"limit": int(limit)},
+    ).result_set
+    return {"most_critical": [{"function": r[0], "score": round(r[1], 4)} for r in rows]}
+
+
+def criticality_of(name):
+    rows = _g().query(
+        "CALL algo.pageRank('Function', 'CALLS') YIELD node, score "
+        "WITH node, score WHERE node.in_tests = false "
+        "RETURN node.name AS name, score ORDER BY score DESC"
+    ).result_set
+    names = [r[0] for r in rows]
+    if name not in names:
+        return None
+    rank = names.index(name) + 1
+    return {
+        "rank": rank,
+        "of": len(names),
+        "percentile": round(100 * rank / len(names), 1),
+        "score": round(rows[rank - 1][1], 4),
+    }

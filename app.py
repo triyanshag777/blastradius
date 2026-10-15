@@ -6,6 +6,7 @@ from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 
 import agent
+import report
 import tools
 
 app = FastAPI()
@@ -74,6 +75,15 @@ async def api_ask(q: Q):
         "calls": [{"tool": n, "args": a} for n, a in calls],
         "graph": build_graph(results),
     }
+
+
+class T(BaseModel):
+    target: str
+
+
+@app.post("/api/pr_comment")
+def api_pr_comment(t: T):
+    return {"markdown": report.make_pr_comment(t.target)}
 
 
 @app.get("/", response_class=HTMLResponse)

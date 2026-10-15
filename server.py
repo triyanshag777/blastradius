@@ -34,5 +34,11 @@ def explain_path(source: str, target: str) -> dict:
     return tools.explain_path(source, target)
 
 
+@mcp.tool()
+def criticality(limit: int = 10) -> dict:
+    """Rank the most critical (most depended-on) non-test functions of the whole repository with PageRank. Use for questions like which functions are the riskiest or most important."""
+    return tools.criticality(limit)
+
+
 if __name__ == "__main__":
     mcp.run()

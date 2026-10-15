@@ -64,6 +64,12 @@
     <div class="card">
       <h3>Answer</h3>
       <div id="answer">Ask a question to start.</div>
+      <div style="margin-top:10px"><button id="prbtn" class="ghost" style="display:none">Generate PR comment</button></div>
+    </div>
+    <div class="card" id="prcard" style="display:none;margin-top:14px">
+      <h3>PR comment (ready to paste)</h3>
+      <textarea id="prtext" style="width:100%;height:260px;background:#0d1117;color:#e6edf3;border:1px solid var(--line);border-radius:8px;padding:8px;font-family:ui-monospace,monospace;font-size:12px"></textarea>
+      <button id="copybtn" style="margin-top:8px">Copy</button>
     </div>
   </div>
 </div>
@@ -124,13 +130,20 @@ async function ask(question) {
       s.textContent = c.tool + '(' + (c.args.name || c.args.text || c.args.source || '') .split('.').slice(-2).join('.') + ')';
       t.appendChild(s);
     });
-    if (data.graph) render(data.graph);
+    if (data.graph) { render(data.graph); window.lastTarget = data.graph.target; document.getElementById('prbtn').style.display = 'inline-block'; }
   } catch (e) {
     document.getElementById('answer').textContent = 'Error: ' + e;
   }
   btn.disabled = false; btn.textContent = 'Ask';
 }
 
+document.getElementById('prbtn').onclick = async () => {
+  const res = await fetch('/api/pr_comment', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ target: window.lastTarget }) });
+  const data = await res.json();
+  document.getElementById('prtext').value = data.markdown;
+  document.getElementById('prcard').style.display = 'block';
+};
+document.getElementById('copybtn').onclick = () => navigator.clipboard.writeText(document.getElementById('prtext').value);
 document.getElementById('go').onclick = () => ask(document.getElementById('q').value);
 document.getElementById('q').addEventListener('keydown', e => { if (e.key === 'Enter') ask(e.target.value); });
 document.querySelectorAll('button[data-q]').forEach(b => b.onclick = () => { document.getElementById('q').value = b.dataset.q; ask(b.dataset.q); });

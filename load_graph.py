@@ -10,6 +10,11 @@ def is_test_func(qname, file):
     return in_test_file and qname.split(".")[-1].startswith("test")
 
 
+def in_tests_file(file):
+    p = Path(file)
+    return "tests" in p.parts or p.name.startswith("test_") or p.name.endswith("_test.py") or p.name == "conftest.py"
+
+
 def load(repo_path, graph_name="blastradius"):
     functions, edges = parse_repo(repo_path)
     db = FalkorDB(host="localhost", port=6379)
@@ -23,11 +28,11 @@ def load(repo_path, graph_name="blastradius"):
 
     g.query("CREATE INDEX FOR (f:Function) ON (f.name)")
     rows = [
-        {"name": n, "file": f, "is_test": is_test_func(n, f)}
+        {"name": n, "file": f, "is_test": is_test_func(n, f), "in_tests": in_tests_file(f)}
         for n, f in functions.items()
     ]
     g.query(
-        "UNWIND $rows AS r CREATE (:Function {name: r.name, file: r.file, is_test: r.is_test})",
+        "UNWIND $rows AS r CREATE (:Function {name: r.name, file: r.file, is_test: r.is_test, in_tests: r.in_tests})",
         {"rows": rows},
     )
     g.query(

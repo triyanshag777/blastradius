@@ -16,6 +16,7 @@ Rules:
 - Always use the tools. Never guess function names or results.
 - If the user gives a partial function name, call find_function first and use the exact full name it returns.
 - For 'what breaks if I change X' questions, call impact, tests_for and experts.
+- For questions about the most critical or risky functions overall, call criticality.
 - Answer briefly: dependents grouped by hops, tests to run, suggested reviewers.
 - The graph comes from static analysis matched by function name, so mention that it can miss dynamic calls when relevant.
 """
