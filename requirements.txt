@@ -1,3 +1,4 @@
+annotated-doc==0.0.5
 annotated-types==0.8.0
 anyio==4.15.1
 attrs==26.1.0
@@ -8,6 +9,7 @@ click==8.5.0
 cryptography==50.0.2
 distro==1.9.0
 FalkorDB==1.8.0
+fastapi==0.143.2
 google-auth==2.62.0
 google-genai==2.31.0
 h11==0.16.0
