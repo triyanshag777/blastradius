@@ -70,7 +70,7 @@ We asked the same question ("what depends on `Session.prepare_request`?") to a p
 ## Limitations (honest list)
 
 - Python only. The parser uses `ast` and never executes the code.
-- Calls are matched by name. Common method names (`get`, `items`, ...) are skipped and `self.x()` calls are matched inside the same file first. This removed about 40% of false edges on `requests`, but dynamic dispatch, aliases and decorators are still not resolved.
+- Calls are matched by name. Common method names (`get`, `items`, ...) are skipped and `self.x()` calls are matched inside the same file first. This cut call edges on `requests` from 1754 to 1058, but dynamic dispatch, aliases and decorators are still not resolved.
 - Reviewers come from file-level git history, not function-level.
 - Static analysis can both miss calls and suggest tests that only reach a function indirectly.
 
