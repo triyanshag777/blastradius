@@ -39,6 +39,7 @@
 <div class="bar">
   <input id="q" placeholder="Ask: What breaks if I change prepare_request?">
   <button id="go">Ask</button>
+  <button id="chk" class="ghost">Check my changes</button>
   <button class="ghost" data-q="What breaks if I change prepare_request in sessions? Which tests should I run and who should review?">Example 1</button>
   <button class="ghost" data-q="What breaks if I change the send function in Session? Which tests should I run?">Example 2</button>
 </div>
@@ -74,6 +75,11 @@
   </div>
 </div>
 
+<div class="card" id="checkcard" style="display:none;margin:0 20px 20px">
+  <h3>Change check (only problems introduced by your change)</h3>
+  <div id="checkbody"></div>
+</div>
+
 <script>
 const COLORS = { 0:'#ff4d4d', 1:'#ff9f43', 2:'#ffd166', 3:'#9aa5b1' };
 let cy = null;
@@ -95,6 +101,7 @@ function render(g) {
           'height': n => n.data('hops')===0 ? 42 : (n.data('hops')===1 ? 28 : 20),
           'shape': n => n.data('kind')==='test' ? 'diamond' : 'ellipse' } },
       { selector:'edge', style:{ 'width':1.4, 'line-color':'#3b4252', 'target-arrow-color':'#3b4252', 'target-arrow-shape':'triangle', 'curve-style':'bezier' } },
+      { selector:'node[kind = "broken"]', style:{ 'border-width':4, 'border-color':'#ff0000' } },
       { selector:'node.path', style:{ 'background-color':'#ffffff', 'border-width':3, 'border-color':'#ff7b54' } },
       { selector:'edge.path', style:{ 'line-color':'#ff7b54', 'target-arrow-color':'#ff7b54', 'width':4 } },
       { selector:'node[hops = 0]', style:{ 'background-color':'#ff4d4d', 'border-width':3, 'border-color':'#ffffff' } },
@@ -144,6 +151,59 @@ document.getElementById('prbtn').onclick = async () => {
   document.getElementById('prcard').style.display = 'block';
 };
 document.getElementById('copybtn').onclick = () => navigator.clipboard.writeText(document.getElementById('prtext').value);
+function esc(s) { return String(s).replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c])); }
+const SEV = { error:'#ff4d4d', warning:'#ffd166', info:'#8b949e' };
+async function runCheck() {
+  const btn = document.getElementById('chk');
+  const card = document.getElementById('checkcard');
+  const body = document.getElementById('checkbody');
+  btn.disabled = true; btn.textContent = 'Checking...';
+  card.style.display = 'block';
+  body.textContent = 'Comparing your working copy with the last commit...';
+  try {
+    const res = await fetch('/api/check', { method: 'POST' });
+    const d = await res.json();
+    if (d.error) {
+      body.textContent = d.error;
+    } else if (!d.changes.length) {
+      body.textContent = 'No changed functions found. Edit a function in the repo (without committing) and run again.';
+    } else {
+      const errs = d.findings.filter(f => f.severity === 'error').length;
+      const warns = d.findings.filter(f => f.severity === 'warning').length;
+      let h = '<div><span class="chip">' + d.changes.length + ' function(s) changed</span>' +
+        '<span class="chip" style="color:#ff4d4d">' + errs + ' definite error(s)</span>' +
+        '<span class="chip" style="color:#ffd166">' + warns + ' possible</span>' +
+        '<span class="chip">' + d.tests_total + ' test(s) reach your change</span></div>';
+      h += '<h3 style="margin-top:12px">What you changed</h3><ul>';
+      d.changes.forEach(c => {
+        h += '<li><b>' + esc(c.short) + '</b> (' + esc(c.kind) + '): ' + esc(c.detail) + ' - ' + c.dependents + ' dependents, ' + c.tests + ' tests</li>';
+      });
+      h += '</ul><h3>New problems caused by your change</h3>';
+      if (!d.findings.length) h += '<p>None found. Logic-only changes cannot be checked statically, so run the tests below.</p>';
+      d.findings.slice(0, 12).forEach(f => {
+        h += '<div style="border-left:3px solid ' + (SEV[f.severity] || '#8b949e') + ';padding:6px 10px;margin:8px 0;background:#0d1117">' +
+          '<b>' + esc(f.severity.toUpperCase()) + '</b> in <code>' + esc(f.caller_short) + '</code> (' + esc(f.file) + ':' + f.line + ')<br>' + esc(f.message);
+        if (f.call_text) h += '<pre style="margin:6px 0;color:#ff7b72;white-space:pre-wrap">- ' + esc(f.call_text) + '</pre>';
+        if (f.fix) {
+          h += '<pre style="margin:0;color:#7ee787;white-space:pre-wrap">+ ' + esc(f.fix.new) + '</pre><small>' +
+            (f.fix.verified ? 'Fix re-checked against the new signature.' : 'Fix NOT verified, review it.') +
+            (f.fix.source === 'ai' ? ' AI-suggested, review the values.' : '') + '</small>';
+        }
+        h += '</div>';
+      });
+      if (d.findings.length > 12) h += '<p>+ ' + (d.findings.length - 12) + ' more</p>';
+      if (d.tests_cmd) h += '<h3>Tests to run</h3><pre style="white-space:pre-wrap">' + esc(d.tests_cmd) + '</pre>';
+      if (d.patch) h += '<h3>Suggested patch (git apply)</h3><textarea style="width:100%;height:160px;background:#0d1117;color:#e6edf3;border:1px solid #30363d;border-radius:8px;padding:8px;font-family:ui-monospace,monospace;font-size:12px">' + esc(d.patch) + '</textarea>';
+      body.innerHTML = h;
+      if (d.graph) render(d.graph);
+    }
+  } catch (e) {
+    body.textContent = 'Error: ' + e;
+  }
+  btn.disabled = false; btn.textContent = 'Check my changes';
+}
+document.getElementById('chk').onclick = runCheck;
+
 document.getElementById('go').onclick = () => ask(document.getElementById('q').value);
 document.getElementById('q').addEventListener('keydown', e => { if (e.key === 'Enter') ask(e.target.value); });
 document.querySelectorAll('button[data-q]').forEach(b => b.onclick = () => { document.getElementById('q').value = b.dataset.q; ask(b.dataset.q); });

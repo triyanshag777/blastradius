@@ -5,7 +5,10 @@ from fastapi import FastAPI
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 
+import os
+
 import agent
+import check_change
 import report
 import tools
 
@@ -84,6 +87,31 @@ class T(BaseModel):
 @app.post("/api/pr_comment")
 def api_pr_comment(t: T):
     return {"markdown": report.make_pr_comment(t.target)}
+
+
+REPO_PATH = os.environ.get("REPO_PATH", "../demo_repos/requests")
+
+
+@app.post("/api/check")
+def api_check():
+    try:
+        r = check_change.check(REPO_PATH, use_llm=True)
+    except Exception as e:
+        return {"error": f"Check failed: {e}"}
+    graph = None
+    if r["focus"]:
+        results = [
+            {"tool": "impact", "result": tools.impact(r["focus"])},
+            {"tool": "tests_for", "result": tools.tests_for(r["focus"])},
+        ]
+        graph = build_graph(results)
+        if graph:
+            broken = {f["caller"] for f in r["findings"] if f["severity"] == "error"}
+            for n in graph["nodes"]:
+                if n["id"] in broken:
+                    n["kind"] = "broken"
+    r["graph"] = graph
+    return r
 
 
 @app.get("/", response_class=HTMLResponse)
