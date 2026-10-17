@@ -3,6 +3,7 @@ import difflib
 import os
 import re
 import subprocess
+import time
 import sys
 from collections import Counter
 from pathlib import Path
@@ -179,6 +180,25 @@ def verify(new_text, fn, bound, expected_name):
     return name == expected_name and compat(fn, e, bound) is None
 
 
+def rule_fix(fn, call, bound, text, simple):
+    a = fn.args
+    pos = [p.arg for p in a.posonlyargs + a.args]
+    if bound and pos:
+        pos = pos[1:]
+    n_def = len(a.defaults)
+    required_pos = pos[: max(0, len(pos) - n_def)]
+    required_kw = [k.arg for k, d in zip(a.kwonlyargs, a.kw_defaults) if d is None]
+    given = set(pos[: len(call.args)]) | {k.arg for k in call.keywords}
+    missing = [p for p in required_pos + required_kw if p not in given]
+    if not missing or not text.rstrip().endswith(")"):
+        return None
+    inner = text.rstrip()[:-1].rstrip()
+    if inner.endswith(","):
+        inner = inner[:-1]
+    sep = "" if inner.endswith("(") else ", "
+    return inner + sep + ", ".join(f"{m}=None" for m in missing) + ")"
+
+
 def llm_fix(client, model, old_sig, new_sig, name, caller, call_text, problem):
     prompt = (
         "A Python function signature changed and this call no longer matches it.\n"
@@ -300,7 +320,11 @@ def check(repo, base="HEAD", head=None, use_llm=True):
                     f = make_finding(sev, "signature", q, label, caller, cfile, node.lineno, text,
                                      f"{problem}. `{label}` now takes ({sig_text(hfn)}).", None, edit)
                     findings.append(f)
-                    pending.append((f, hfn, bound, sig_text(bfn), sig_text(hfn), simple, problem))
+                    rf = rule_fix(hfn, node, bound, text, simple)
+                    if rf and verify(rf, hfn, bound, simple):
+                        f["fix"] = {"old": text, "new": rf, "verified": True, "source": "rule"}
+                    else:
+                        pending.append((f, hfn, bound, sig_text(bfn), sig_text(hfn), simple, problem))
                 elif kind == "removed":
                     seen.add(key)
                     findings.append(make_finding(
@@ -324,13 +348,14 @@ def check(repo, base="HEAD", head=None, use_llm=True):
     pending.sort(key=lambda p: ".tests." in p[0]["caller"] or p[0]["caller"].startswith("tests."))
     done = 0
     for f, hfn, bound, osig, nsig, simple, problem in pending:
-        if client is None or done >= 20:
+        if client is None or done >= 10:
             break
         try:
             new_text = llm_fix(client, model, osig, nsig, simple, f["caller_short"], f["call_text"], problem)
         except Exception:
             continue
         done += 1
+        time.sleep(2)
         f["fix"] = {"old": f["call_text"], "new": new_text,
                     "verified": verify(new_text, hfn, bound, simple), "source": "ai"}
 
@@ -373,9 +398,13 @@ def check(repo, base="HEAD", head=None, use_llm=True):
 
 
 def print_report(r):
-    print(f"\nChanged functions: {len(r['changes'])}")
-    for c in r["changes"]:
+    api = [c for c in r["changes"] if c["kind"] != "body"]
+    logic = [c for c in r["changes"] if c["kind"] == "body"]
+    print(f"\nChanged functions: {len(r['changes'])} ({len(api)} API change(s), {len(logic)} logic edit(s))")
+    for c in api:
         print(f"  - [{c['kind']}] {c['short']}: {c['detail']}  ({c['dependents']} dependents, {c['tests']} tests)")
+    if logic:
+        print(f"  + {len(logic)} function(s) with logic edits (cannot be checked statically, see the tests below)")
     errs = [f for f in r["findings"] if f["severity"] == "error"]
     warns = [f for f in r["findings"] if f["severity"] == "warning"]
     print(f"\nNew problems caused by your change: {len(errs)} definite, {len(warns)} possible")

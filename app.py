@@ -72,7 +72,10 @@ def build_graph(results):
 
 @app.post("/api/ask")
 async def api_ask(q: Q):
-    answer, calls, results = await agent.ask(q.question)
+    try:
+        answer, calls, results = await agent.ask(q.question)
+    except Exception as e:
+        return {"answer": "The AI service is busy or rate-limited (free tier). Wait about a minute and ask again.\n\nDetails: " + str(e)[:200], "calls": [], "graph": None}
     return {
         "answer": answer,
         "calls": [{"tool": n, "args": a} for n, a in calls],

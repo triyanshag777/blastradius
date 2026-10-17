@@ -1,4 +1,5 @@
 import asyncio
+import re
 import json
 import os
 import sys
@@ -20,6 +21,18 @@ Rules:
 - Answer briefly: dependents grouped by hops, tests to run, suggested reviewers.
 - The graph comes from static analysis matched by function name, so mention that it can miss dynamic calls when relevant.
 """
+
+
+async def chat(client, **kw):
+    import openai
+    for _ in range(8):
+        try:
+            return await client.chat.completions.create(**kw)
+        except openai.RateLimitError as e:
+            m = re.search(r"try again in ([0-9.]+)s", str(e))
+            wait = float(m.group(1)) + 1 if m else 8
+            await asyncio.sleep(min(wait, 20))
+    raise RuntimeError("Rate limit: please wait a minute and try again")
 
 
 async def ask(question, max_steps=8):
@@ -52,9 +65,7 @@ async def ask(question, max_steps=8):
             ]
             calls, results = [], []
             for _ in range(max_steps):
-                resp = await client.chat.completions.create(
-                    model=MODEL, messages=messages, tools=tools, temperature=0
-                )
+                resp = await chat(client, model=MODEL, messages=messages, tools=tools, temperature=0)
                 msg = resp.choices[0].message
                 if not msg.tool_calls:
                     return msg.content, calls, results
@@ -71,7 +82,7 @@ async def ask(question, max_steps=8):
                         parsed = text
                     results.append({"tool": tc.function.name, "args": args, "result": parsed})
                     messages.append(
-                        {"role": "tool", "tool_call_id": tc.id, "content": text[:3500]}
+                        {"role": "tool", "tool_call_id": tc.id, "content": text[:2200]}
                     )
             return "Agent stopped after too many steps.", calls, results
 

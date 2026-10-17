@@ -175,10 +175,10 @@ async function runCheck() {
         '<span class="chip" style="color:#ffd166">' + warns + ' possible</span>' +
         '<span class="chip">' + d.tests_total + ' test(s) reach your change</span></div>';
       h += '<h3 style="margin-top:12px">What you changed</h3><ul>';
-      d.changes.forEach(c => {
+      d.changes.filter(c => c.kind !== 'body').forEach(c => {
         h += '<li><b>' + esc(c.short) + '</b> (' + esc(c.kind) + '): ' + esc(c.detail) + ' - ' + c.dependents + ' dependents, ' + c.tests + ' tests</li>';
       });
-      h += '</ul><h3>New problems caused by your change</h3>';
+      h += '</ul>' + (d.changes.some(c => c.kind === 'body') ? '<p>+ ' + d.changes.filter(c => c.kind === 'body').length + ' function(s) with logic edits (not checkable statically; run the tests below).</p>' : '') + '<h3>New problems caused by your change</h3>';
       if (!d.findings.length) h += '<p>None found. Logic-only changes cannot be checked statically, so run the tests below.</p>';
       d.findings.slice(0, 12).forEach(f => {
         h += '<div style="border-left:3px solid ' + (SEV[f.severity] || '#8b949e') + ';padding:6px 10px;margin:8px 0;background:#0d1117">' +
@@ -187,7 +187,7 @@ async function runCheck() {
         if (f.fix) {
           h += '<pre style="margin:0;color:#7ee787;white-space:pre-wrap">+ ' + esc(f.fix.new) + '</pre><small>' +
             (f.fix.verified ? 'Fix re-checked against the new signature.' : 'Fix NOT verified, review it.') +
-            (f.fix.source === 'ai' ? ' AI-suggested, review the values.' : '') + '</small>';
+            (f.fix.source === 'ai' ? ' AI-suggested, review the values.' : ' Rule-based fix: the new argument is set to None, choose the real value.') + '</small>';
         }
         h += '</div>';
       });
