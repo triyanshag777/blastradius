@@ -186,7 +186,7 @@ def llm_fix(client, model, old_sig, new_sig, name, caller, call_text, problem):
         f"Function being called: {name}\nProblem: {problem}\n"
         f"Broken call (inside {caller}):\n{call_text}\n\n"
         "Return ONLY the corrected call expression, in the same style, with no explanation and no code fences. "
-        "If a new required parameter needs a value you cannot know, use a clearly named sensible value. "
+        "If a new required parameter needs a value you cannot know, pass None for it as a placeholder (the developer will choose the real value). "
         "Change nothing else."
     )
     resp = client.chat.completions.create(
@@ -320,11 +320,11 @@ def check(repo, base="HEAD", head=None, use_llm=True):
     client, model = None, os.getenv("LLM_MODEL", "openai/gpt-oss-120b")
     if use_llm and os.getenv("LLM_API_KEY") and pending:
         from openai import OpenAI
-        client = OpenAI(api_key=os.environ["LLM_API_KEY"], base_url=os.environ["LLM_BASE_URL"])
+        client = OpenAI(api_key=os.environ["LLM_API_KEY"], base_url=os.environ["LLM_BASE_URL"], max_retries=6)
     pending.sort(key=lambda p: ".tests." in p[0]["caller"] or p[0]["caller"].startswith("tests."))
     done = 0
     for f, hfn, bound, osig, nsig, simple, problem in pending:
-        if client is None or done >= 6:
+        if client is None or done >= 20:
             break
         try:
             new_text = llm_fix(client, model, osig, nsig, simple, f["caller_short"], f["call_text"], problem)

@@ -37,7 +37,7 @@ prompt = (
     + code
 )
 
-client = OpenAI(api_key=os.environ["LLM_API_KEY"], base_url=os.environ["LLM_BASE_URL"])
+client = OpenAI(api_key=os.environ["LLM_API_KEY"], base_url=os.environ["LLM_BASE_URL"], max_retries=6)
 resp = client.chat.completions.create(
     model=MODEL, messages=[{"role": "user", "content": prompt}], temperature=0
 )

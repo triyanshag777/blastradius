@@ -26,6 +26,7 @@ async def ask(question, max_steps=8):
     client = AsyncOpenAI(
         api_key=os.environ["LLM_API_KEY"],
         base_url=os.environ["LLM_BASE_URL"],
+        max_retries=6,
     )
     params = StdioServerParameters(command=sys.executable, args=["server.py"])
     async with stdio_client(params) as (read, write):
@@ -70,7 +71,7 @@ async def ask(question, max_steps=8):
                         parsed = text
                     results.append({"tool": tc.function.name, "args": args, "result": parsed})
                     messages.append(
-                        {"role": "tool", "tool_call_id": tc.id, "content": text}
+                        {"role": "tool", "tool_call_id": tc.id, "content": text[:3500]}
                     )
             return "Agent stopped after too many steps.", calls, results
 
