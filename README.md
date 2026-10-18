@@ -63,6 +63,20 @@ The PR comment (`report.py`) combines these: risk level comes from the number of
 - Actions based on what the graph shows: generated PR comment with risk level
 - Explainable results: the reasoning path is highlighted in the graph
 
+## Change Check: errors introduced by your change
+
+Before you commit, BlastRadius compares your working copy with the last commit (or any two git refs) and answers: what will my change break?
+
+1. It finds the functions you removed, renamed or whose signature changed (`ast`, nothing is executed).
+2. It asks the graph who calls them, then checks every call site against the new signature.
+3. It reports only problems **introduced by your change**: calls that were already wrong before are ignored.
+4. For each definite problem it suggests a fix and re-checks that the fixed call matches the new signature. Simple cases (a new required argument) are fixed by rule, with `None` as a placeholder you must replace; harder ones are drafted by the LLM and marked as AI-suggested.
+5. It writes a `git apply`-able patch, lists the tests to run, and never commits or applies anything by itself.
+
+Demo on `psf/requests`: `scripts/demo.sh break` makes `Session.prepare_request` require a new argument; Change Check finds 13 broken calls (12 tests and `Session.request`), proposes fixes, and after `scripts/demo.sh fix` it reports 0 new problems. `scripts/demo.sh reset` restores the repo.
+
+What it can and cannot see: removed or renamed functions and changed parameters are detected statically. Changes to what a function does inside (logic, return values) cannot be checked statically, so those are reported as "run these tests".
+
 ## Why a graph? A small test
 
 We asked the same question ("what depends on `Session.prepare_request`?") to a plain LLM that was given only `sessions.py`. The graph found 16 dependents; the LLM found 8, and missed all the functions in `api.py`. It invented no names, it just could not see the other file. This is an illustrative check, not a rigorous benchmark: a larger context window helps on small repos, but whole repositories do not fit in a prompt, and the graph also returns a verifiable path. Run it yourself with `python compare.py`.
