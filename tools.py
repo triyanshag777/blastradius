@@ -101,7 +101,7 @@ def node_info(name):
     meta = g.query("MATCH (f:Function {name: $n}) RETURN f.file, f.is_test", {"n": name}).result_set
     if not meta:
         return None
-    q_in = "MATCH (c:Function)-[:CALLS]->(f:Function {name: $n}) RETURN c.name ORDER BY c.name"
+    q_in = "MATCH (c:Function)-[:CALLS]->(f:Function {name: $n}) WHERE c.in_tests = false RETURN c.name ORDER BY c.name"
     q_out = "MATCH (f:Function {name: $n})-[:CALLS]->(c:Function) RETURN c.name ORDER BY c.name"
     callers = [r[0] for r in g.query(q_in, {"n": name}).result_set]
     callees = [r[0] for r in g.query(q_out, {"n": name}).result_set]
@@ -115,3 +115,28 @@ def node_info(name):
         "experts": experts(name)["experts"],
         "criticality": criticality_of(name),
     }
+
+
+QUERIES = {
+    "find_function": """MATCH (f:Function)
+WHERE f.name CONTAINS $s AND f.in_tests = false
+RETURN f.name LIMIT 10""",
+    "impact (multi-hop traversal, up to 5 hops)": """MATCH p = (d:Function)-[:CALLS*1..5]->(f:Function {name: $name})
+WHERE d.in_tests = false AND d.name <> $name
+RETURN d.name AS dependent, min(length(p)) AS hops
+ORDER BY hops, dependent""",
+    "tests_for": """MATCH p = (t:Function)-[:CALLS*1..5]->(f:Function {name: $name})
+WHERE t.is_test = true
+RETURN t.name AS test, min(length(p)) AS hops
+ORDER BY hops, test""",
+    "experts": """MATCH (p:Person)-[e:EDITED]->(f:Function {name: $name})
+RETURN p.name AS person, e.commits AS commits
+ORDER BY commits DESC LIMIT 3""",
+    "explain_path (shortest path)": """MATCH (a:Function {name: $a}), (b:Function {name: $b})
+WITH shortestPath((a)-[:CALLS*..6]->(b)) AS p
+RETURN [n IN nodes(p) | n.name]""",
+    "criticality (FalkorDB PageRank algorithm)": """CALL algo.pageRank('Function', 'CALLS') YIELD node, score
+WITH node, score WHERE node.in_tests = false
+RETURN node.name AS name, score
+ORDER BY score DESC LIMIT 10""",
+}

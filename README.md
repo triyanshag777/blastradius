@@ -42,6 +42,15 @@ question --> LLM agent --> MCP tools (graph queries and algorithms)
 | CALLS | edge | function A calls function B |
 | EDITED | edge | a person edited the file containing the function (commit count) |
 
+## Graph schema
+
+```mermaid
+flowchart LR
+  Person -- "EDITED (commits)" --> Function
+  Function -- "CALLS" --> Callee["Function (callee)"]
+  Test["Function (is_test = true)"] -- "CALLS" --> Function
+```
+
 ## Agent tools (served over MCP)
 
 | Tool | Purpose | Graph technique |

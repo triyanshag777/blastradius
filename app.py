@@ -135,6 +135,11 @@ def api_check():
     return r
 
 
+@app.get("/api/queries")
+def api_queries():
+    return tools.QUERIES
+
+
 @app.get("/api/node")
 def api_node(name: str):
     return tools.node_info(name) or {"error": "function not found"}
