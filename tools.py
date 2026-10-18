@@ -19,7 +19,7 @@ def find_function(text, limit=10):
 def impact(name, max_hops=5):
     q = (
         f"MATCH p = (d:Function)-[:CALLS*1..{int(max_hops)}]->(f:Function {{name: $name}}) "
-        "WHERE d.in_tests = false "
+        "WHERE d.in_tests = false AND d.name <> $name "
         "RETURN d.name AS dependent, min(length(p)) AS hops "
         "ORDER BY hops, dependent"
     )
