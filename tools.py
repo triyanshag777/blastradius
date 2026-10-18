@@ -94,3 +94,24 @@ def criticality_of(name):
         "percentile": round(100 * rank / len(names), 1),
         "score": round(rows[rank - 1][1], 4),
     }
+
+
+def node_info(name):
+    g = _g()
+    meta = g.query("MATCH (f:Function {name: $n}) RETURN f.file, f.is_test", {"n": name}).result_set
+    if not meta:
+        return None
+    q_in = "MATCH (c:Function)-[:CALLS]->(f:Function {name: $n}) RETURN c.name ORDER BY c.name"
+    q_out = "MATCH (f:Function {name: $n})-[:CALLS]->(c:Function) RETURN c.name ORDER BY c.name"
+    callers = [r[0] for r in g.query(q_in, {"n": name}).result_set]
+    callees = [r[0] for r in g.query(q_out, {"n": name}).result_set]
+    return {
+        "name": name,
+        "file": meta[0][0],
+        "is_test": bool(meta[0][1]),
+        "callers": {"count": len(callers), "sample": callers[:6]},
+        "calls": {"count": len(callees), "sample": callees[:6]},
+        "tests": tests_for(name)["total_tests"],
+        "experts": experts(name)["experts"],
+        "criticality": criticality_of(name),
+    }

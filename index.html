@@ -55,7 +55,9 @@
       <span><i class="dot" style="background:#4dabf7"></i>test</span>
       <span><i class="dot" style="background:#ffffff"></i>reasoning path</span>
     </div>
+    <div id="summary" style="display:none;margin:8px 0"></div>
     <div id="cy"></div>
+    <div id="nodeinfo" style="margin-top:10px;font-size:13px;color:var(--muted)">Click any node in the graph to see its details.</div>
   </div>
   <div>
     <div class="card" style="margin-bottom:14px">
@@ -78,6 +80,11 @@
 <div class="card" id="checkcard" style="display:none;margin:0 20px 20px">
   <h3>Change check (only problems introduced by your change)</h3>
   <div id="checkbody"></div>
+</div>
+
+<div class="card" id="whycard" style="display:none;margin:0 20px 20px">
+  <h3>Why a graph? Same question, plain LLM given one file vs BlastRadius</h3>
+  <div id="whybody"></div>
 </div>
 
 <script>
@@ -108,6 +115,7 @@ function render(g) {
     ],
     layout: { name:'concentric', concentric: n => 10 - n.data('hops'), levelWidth: () => 1, minNodeSpacing: 28, padding: 20 },
   });
+  cy.on('tap', 'node', ev => showNode(ev.target.id()));
   animatePath(g.path);
 }
 
@@ -137,12 +145,56 @@ async function ask(question) {
       s.textContent = c.tool + '(' + (c.args.name || c.args.text || c.args.source || '') .split('.').slice(-2).join('.') + ')';
       t.appendChild(s);
     });
-    if (data.graph) { render(data.graph); window.lastTarget = data.graph.target; document.getElementById('prbtn').style.display = 'inline-block'; }
+    if (data.graph) { render(data.graph); renderSummary(data.graph.summary); window.lastTarget = data.graph.target; document.getElementById('prbtn').style.display = 'inline-block'; }
   } catch (e) {
     document.getElementById('answer').textContent = 'Error: ' + e;
   }
   btn.disabled = false; btn.textContent = 'Ask';
 }
+
+function renderSummary(s) {
+  const el = document.getElementById('summary');
+  if (!s) { el.style.display = 'none'; return; }
+  const col = { HIGH: '#ff4d4d', MEDIUM: '#ffd166', LOW: '#7ee787' }[s.risk];
+  const c = s.criticality;
+  el.innerHTML = '<span class="chip" style="color:' + col + ';border-color:' + col + '">Risk: ' + s.risk + '</span>' +
+    '<span class="chip">' + s.dependents + ' dependents</span>' +
+    (s.tests != null ? '<span class="chip">' + s.tests + ' tests</span>' : '') +
+    (s.direct_callers != null ? '<span class="chip">' + s.direct_callers + ' direct caller(s)</span>' : '') +
+    (c ? '<span class="chip">PageRank (FalkorDB): top ' + c.percentile + '% (score ' + c.score + ')</span>' : '');
+  el.style.display = 'block';
+}
+
+async function showNode(name) {
+  const el = document.getElementById('nodeinfo');
+  el.textContent = 'Loading...';
+  try {
+    const r = await fetch('/api/node?name=' + encodeURIComponent(name));
+    const d = await r.json();
+    if (d.error) { el.textContent = d.error; return; }
+    const short = n => n.split('.').slice(-2).join('.');
+    const list = a => a.length ? a.map(x => '<code>' + esc(short(x)) + '</code>').join(', ') : 'none';
+    el.innerHTML = '<b style="color:#e6edf3">' + esc(short(name)) + '</b> <small>(' + esc(d.file) + ')</small><br>' +
+      'Called by ' + d.callers.count + ': ' + list(d.callers.sample) + '<br>' +
+      'Calls ' + d.calls.count + ': ' + list(d.calls.sample) + '<br>' +
+      (d.is_test ? 'This is a test.' : d.tests + ' test(s) reach it.' + (d.criticality ? ' PageRank: top ' + d.criticality.percentile + '%.' : '')) +
+      (d.experts.length ? '<br>Most edits: ' + d.experts.map(e => esc(e.person) + ' (' + e.commits + ')').join(', ') : '');
+  } catch (e) { el.textContent = 'Error: ' + e; }
+}
+
+async function loadWhy() {
+  try {
+    const d = await (await fetch('/api/why')).json();
+    if (!d.available) return;
+    document.getElementById('whybody').innerHTML =
+      '<span class="chip">Graph: ' + d.graph_count + ' dependents of <code>' + esc(d.target) + '</code></span>' +
+      '<span class="chip">Plain LLM, one file: ' + d.llm_found + '</span>' +
+      '<p>Missed by the LLM: ' + d.missed.map(m => '<code>' + esc(m) + '</code>').join(', ') + '</p>' +
+      '<small>Illustrative test, not a benchmark: the LLM saw only sessions.py. See compare.py.</small>';
+    document.getElementById('whycard').style.display = 'block';
+  } catch (e) {}
+}
+loadWhy();
 
 document.getElementById('prbtn').onclick = async () => {
   const res = await fetch('/api/pr_comment', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ target: window.lastTarget }) });
@@ -173,7 +225,7 @@ async function runCheck() {
       let h = '<div><span class="chip">' + d.changes.length + ' function(s) changed</span>' +
         '<span class="chip" style="color:#ff4d4d">' + errs + ' definite error(s)</span>' +
         '<span class="chip" style="color:#ffd166">' + warns + ' possible</span>' +
-        '<span class="chip">' + d.tests_total + ' test(s) reach your change</span></div>';
+        '<span class="chip">' + d.tests_total + ' test(s) reach your change</span></div>' + (errs ? '<p style="color:#ff4d4d;font-weight:600">Fix before merging: ' + errs + ' definite problem(s) introduced by this change.</p>' : '<p style="color:#7ee787;font-weight:600">No definite errors found. Logic changes cannot be checked statically, so run the tests below.</p>');
       h += '<h3 style="margin-top:12px">What you changed</h3><ul>';
       d.changes.filter(c => c.kind !== 'body').forEach(c => {
         h += '<li><b>' + esc(c.short) + '</b> (' + esc(c.kind) + '): ' + esc(c.detail) + ' - ' + c.dependents + ' dependents, ' + c.tests + ' tests</li>';
@@ -195,7 +247,7 @@ async function runCheck() {
       if (d.tests_cmd) h += '<h3>Tests to run</h3><pre style="white-space:pre-wrap">' + esc(d.tests_cmd) + '</pre>';
       if (d.patch) h += '<h3>Suggested patch (git apply)</h3><textarea style="width:100%;height:160px;background:#0d1117;color:#e6edf3;border:1px solid #30363d;border-radius:8px;padding:8px;font-family:ui-monospace,monospace;font-size:12px">' + esc(d.patch) + '</textarea>';
       body.innerHTML = h;
-      if (d.graph) render(d.graph);
+      if (d.graph) { render(d.graph); renderSummary(d.graph.summary); }
     }
   } catch (e) {
     body.textContent = 'Error: ' + e;

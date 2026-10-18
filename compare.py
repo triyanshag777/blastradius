@@ -56,3 +56,15 @@ for m in missed:
 print("\nNames the LLM gave that are not in the graph result:")
 for e in extra:
     print("  -", e)
+
+
+import json as _json
+from pathlib import Path as _Path
+_Path("docs").mkdir(exist_ok=True)
+_Path("docs/compare_result.json").write_text(_json.dumps({
+    "target": short(TARGET),
+    "graph_count": len(graph_set),
+    "llm_found": len(found),
+    "missed": missed,
+    "extra": extra,
+}))

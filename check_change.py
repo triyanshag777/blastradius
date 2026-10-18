@@ -429,9 +429,12 @@ if __name__ == "__main__":
     ap.add_argument("--base", default="HEAD")
     ap.add_argument("--head", default=None)
     ap.add_argument("--no-llm", action="store_true")
+    ap.add_argument("--fail-on-error", action="store_true")
     a = ap.parse_args()
     res = check(a.repo, a.base, a.head, use_llm=not a.no_llm)
     if not res["changes"]:
         print("No changed Python functions found. Edit a function (without committing) and run again.")
     else:
         print_report(res)
+    if a.fail_on_error and any(f["severity"] == "error" for f in res["findings"]):
+        sys.exit(1)

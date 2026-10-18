@@ -30,6 +30,23 @@ def last_result(results, tool, key):
     return None
 
 
+def make_summary(target, total, tst):
+    crit = tools.criticality_of(target)
+    info = tools.node_info(target) or {}
+    level = "LOW"
+    if total >= 15 or (crit and crit["percentile"] <= 10):
+        level = "HIGH"
+    elif total >= 5:
+        level = "MEDIUM"
+    return {
+        "risk": level,
+        "dependents": total,
+        "tests": tst["total_tests"] if tst else None,
+        "direct_callers": (info.get("callers") or {}).get("count"),
+        "criticality": crit,
+    }
+
+
 def build_graph(results):
     imp = last_result(results, "impact", "dependents")
     if not imp:
@@ -67,6 +84,7 @@ def build_graph(results):
         "path": path,
         "total_dependents": imp["total_dependents"],
         "shown": len(deps),
+        "summary": make_summary(target, imp["total_dependents"], tst),
     }
 
 
@@ -115,6 +133,20 @@ def api_check():
                     n["kind"] = "broken"
     r["graph"] = graph
     return r
+
+
+@app.get("/api/node")
+def api_node(name: str):
+    return tools.node_info(name) or {"error": "function not found"}
+
+
+@app.get("/api/why")
+def api_why():
+    import json
+    p = Path("docs/compare_result.json")
+    if not p.exists():
+        return {"available": False}
+    return {"available": True, **json.loads(p.read_text())}
 
 
 @app.get("/", response_class=HTMLResponse)
