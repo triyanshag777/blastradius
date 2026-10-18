@@ -4,7 +4,7 @@
 
 > Git blame tells you who wrote the code. BlastRadius tells you what will break if you change it, and shows the path.
 
-**Demo video:** TODO_ADD_LINK
+**Demo video:** https://youtu.be/cyB5jUHiZ4M
 
 ![dashboard](docs/dashboard.png)
 
