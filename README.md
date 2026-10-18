@@ -51,6 +51,61 @@ flowchart LR
   Test["Function (is_test = true)"] -- "CALLS" --> Function
 ```
 
+## Graph queries and algorithms
+
+The exact Cypher each tool runs on FalkorDB (also shown in the dashboard):
+
+**find_function**
+
+```cypher
+MATCH (f:Function)
+WHERE f.name CONTAINS $s AND f.in_tests = false
+RETURN f.name LIMIT 10
+```
+
+**impact (multi-hop traversal, up to 5 hops)**
+
+```cypher
+MATCH p = (d:Function)-[:CALLS*1..5]->(f:Function {name: $name})
+WHERE d.in_tests = false AND d.name <> $name
+RETURN d.name AS dependent, min(length(p)) AS hops
+ORDER BY hops, dependent
+```
+
+**tests_for**
+
+```cypher
+MATCH p = (t:Function)-[:CALLS*1..5]->(f:Function {name: $name})
+WHERE t.is_test = true
+RETURN t.name AS test, min(length(p)) AS hops
+ORDER BY hops, test
+```
+
+**experts**
+
+```cypher
+MATCH (p:Person)-[e:EDITED]->(f:Function {name: $name})
+RETURN p.name AS person, e.commits AS commits
+ORDER BY commits DESC LIMIT 3
+```
+
+**explain_path (shortest path)**
+
+```cypher
+MATCH (a:Function {name: $a}), (b:Function {name: $b})
+WITH shortestPath((a)-[:CALLS*..6]->(b)) AS p
+RETURN [n IN nodes(p) | n.name]
+```
+
+**criticality (FalkorDB PageRank algorithm)**
+
+```cypher
+CALL algo.pageRank('Function', 'CALLS') YIELD node, score
+WITH node, score WHERE node.in_tests = false
+RETURN node.name AS name, score
+ORDER BY score DESC LIMIT 10
+```
+
 ## Agent tools (served over MCP)
 
 | Tool | Purpose | Graph technique |
